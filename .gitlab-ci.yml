@@ -1,0 +1,12 @@
+image: alpine
+
+stages:
+  - build
+  - test
+
+
+build:
+  stage: build
+  script:
+    - docker build -t openbis .
+    - docker run openbis /script/to/run/tests
