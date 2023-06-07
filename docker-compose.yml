@@ -8,44 +8,59 @@ volumes:
       type: 'none'
       o: 'bind'
       device: './store'
+
+
 networks:
   local:
     driver: bridge
 
+
+secrets:
+  openbis_password:
+    file: ./services/openbis/openbis_password.txt
+
+
 services:
   #Openbis
   openbis:
-    build: 
-      context: .
+    build:
+      context: ./openbis
       dockerfile: Dockerfile
     environment:
       #Here you can configure some openbis options for the AS
-      - SERVER_HOST_PORT=localhost:8080
-      - HOSTNAME=localhost:8444
+      - SERVER_HOST_PORT=localhost:443
       - GROUP_ID=1000
+      - USER_ID=1000
+      - ADMIN_PASSWORD=${OPENBIS_PASSWORD}
       #Enable the basic plugins
       - CORE_PLUGINS=enabled-modules = dataset-uploader, dataset-file-search, xls-import, eln-lims, openbis-ng-ui, search-store, user-management-maintenance, empa
     volumes:
-      #External configuration files
-      # - type: bind
-      #   source: ./services/openbis/as_service.properties
-      #   target: /home/openbis/openbis_state/as_etc/service.properties
-      #Openbis state
-
       - openbis-state:/home/openbis/openbis_state/
-      - ./src:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
+      - ./openbis/src:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
       - store:/home/openbis/openbis_state/dss_store
-
     ports:
-      - 8443:443
-      - 8444:8080
-    hostname: openbis
-    healthcheck:
-      test: [ "CMD", "curl", "openbis:443" ]
-      interval: 1m30s
-      timeout: 30s
-      retries: 5
-      start_period: 30s
+      - 8445:443
+      - 8080:8080
     networks:
       - local
-  
+    healthcheck:
+      test: ["CMD", "./check_health.sh", "https://openbis:443/"]
+      interval: 3s
+      timeout: 1s
+      retries: 10
+  #Initialiser
+  initialiser:
+    build:
+      context: ./initialiser
+      dockerfile: Dockerfile
+    environment:
+      - OPENBIS_URL=https://openbis:443
+      - OPENBIS_USER=${OPENBIS_USER}
+      - OPENBIS_PASSWORD=${OPENBIS_PASSWORD}
+    volumes:
+      - ./initialiser/initialise_masterdata.py:/initialise_masterdata.py
+    depends_on:
+      openbis:
+        condition: service_healthy
+    networks:
+      - local

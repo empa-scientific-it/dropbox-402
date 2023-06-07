@@ -1,0 +1,50 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  build:
+    cmds:
+      - docker compose build
+    sources:
+      - docker_compose.yml
+      - initialiser/Dockerfile
+      - openbis/Dockerfile
+      #- openbis/src/collection-handler/collection-handler.py
+
+  start_openbis:
+    cmds:
+      - docker compose up -d openbis --no-deps
+      - touch openbis.done
+    deps:
+      - build
+    status:
+        - ./openbis/check_health.sh https://localhost:8445
+  start_initialiser:
+    cmds:
+      - docker compose up -d initialiser --no-deps
+    status:
+      - docker compose ps --status=running | grep -qF "initialiser"
+
+  initialise_masterdata:
+    cmds:
+      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u admin -p changeit
+    deps:
+      - start_openbis
+      - start_initialiser
+    sources:
+      - initialiser/initialise_masterdata.py
+  move:
+    cmds:
+      - rm {{.USER_WORKING_DIR}}/store/incoming-collection/a.txt
+      - touch {{.USER_WORKING_DIR}}/store/incoming-collection/a.txt
+    deps:
+      - initialise_masterdata
+  follow_logs:
+    cmds:
+      - docker compose exec openbis tail -f /home/openbis/openbis_state/dss_logs/startup_log.txt /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
+    deps:
+      - move
