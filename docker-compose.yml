@@ -37,7 +37,7 @@ services:
     volumes:
       - openbis-state:/home/openbis/openbis_state/
       - ./openbis/src:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
-      - store:/home/openbis/openbis_state/dss_store
+      - store:${DSS_PATH}
     ports:
       - ${OPENBIS_PORT}:443
       - 8080:8080

@@ -1,11 +1,17 @@
 # https://taskfile.dev
 
-version: '3'
+version: "3"
 
-vars:
-  GREETING: Hello, World!
+dotenv:
+  - ".env"
 
 tasks:
+  prepare_dirs:
+    dir: ./store
+    cmds:
+      - ls ./store/
+    generates:
+      - ./store
   build:
     cmds:
       - docker compose build
@@ -13,8 +19,8 @@ tasks:
       - docker_compose.yml
       - initialiser/Dockerfile
       - openbis/Dockerfile
-      #- openbis/src/collection-handler/collection-handler.py
-
+    deps:
+      - prepare_dirs
   start_openbis:
     cmds:
       - docker compose up -d openbis --no-deps
@@ -22,7 +28,14 @@ tasks:
     deps:
       - build
     status:
-        - ./openbis/check_health.sh https://localhost:8445
+      - ./openbis/check_health.sh https://${OPENBIS_HOST}:${OPENBIS_PORT}
+  change_store_permissions:
+    cmds:
+      - docker compose exec openbis chmod 777 ${DSS_PATH}/incoming-collection
+    deps:
+      - start_openbis
+    status:
+      - docker compose exec openbis stat -c '%a' ${DSS_PATH}/incoming-collection | grep -q 2777
   start_initialiser:
     cmds:
       - docker compose up -d initialiser --no-deps
@@ -31,7 +44,7 @@ tasks:
 
   initialise_masterdata:
     cmds:
-      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u admin -p changeit
+      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p {OPENBIS_PASSWORD}
     deps:
       - start_openbis
       - start_initialiser
@@ -39,12 +52,12 @@ tasks:
       - initialiser/initialise_masterdata.py
   move:
     cmds:
-      - rm {{.USER_WORKING_DIR}}/store/incoming-collection/a.txt
-      - touch {{.USER_WORKING_DIR}}/store/incoming-collection/a.txt
+      - cp $(mktemp XXX.txt) {{.USER_WORKING_DIR}}/store/incoming-collection/
     deps:
+      - change_store_permissions
       - initialise_masterdata
   follow_logs:
     cmds:
-      - docker compose exec openbis tail -f /home/openbis/openbis_state/dss_logs/startup_log.txt /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
+      - docker compose exec openbis tail -f -n 50 /home/openbis/openbis_state/dss_logs/startup_log.txt /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
     deps:
       - move
