@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile
     environment:
       #Here you can configure some openbis options for the AS
-      - SERVER_HOST_PORT=localhost:443
+      - SERVER_HOST_PORT=${OPENBIS_HOST}:${OPENBIS_PORT}
       - GROUP_ID=1000
       - USER_ID=1000
       - ADMIN_PASSWORD=${OPENBIS_PASSWORD}
@@ -39,7 +39,7 @@ services:
       - ./openbis/src:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
       - store:/home/openbis/openbis_state/dss_store
     ports:
-      - 8445:443
+      - ${OPENBIS_PORT}:443
       - 8080:8080
     networks:
       - local
