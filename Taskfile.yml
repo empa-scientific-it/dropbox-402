@@ -23,8 +23,7 @@ tasks:
       - prepare_dirs
   start_openbis:
     cmds:
-      - docker compose up -d openbis --no-deps
-      - touch openbis.done
+      - docker compose up -d openbis --no-deps --no-recreate --wait
     deps:
       - build
     status:
@@ -38,26 +37,28 @@ tasks:
       - docker compose exec openbis stat -c '%a' ${DSS_PATH}/incoming-collection | grep -q 2777
   start_initialiser:
     cmds:
-      - docker compose up -d initialiser --no-deps
+      - docker compose up -d initialiser --no-deps --no-recreate
     status:
       - docker compose ps --status=running | grep -qF "initialiser"
 
   initialise_masterdata:
     cmds:
-      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p {OPENBIS_PASSWORD}
+      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD}
     deps:
       - start_openbis
       - start_initialiser
     sources:
       - initialiser/initialise_masterdata.py
+    status:
+      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD} --check
   move:
     cmds:
-      - cp $(mktemp XXX.txt) {{.USER_WORKING_DIR}}/store/incoming-collection/
+      - mv $(./make_upload.sh) ./store/incoming-collection
     deps:
       - change_store_permissions
       - initialise_masterdata
   follow_logs:
     cmds:
-      - docker compose exec openbis tail -f -n 50 /home/openbis/openbis_state/dss_logs/startup_log.txt /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
+      - docker compose exec openbis tail -n 200 /home/openbis/openbis_state/dss_logs/startup_log.txt -n 200 /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
     deps:
       - move
