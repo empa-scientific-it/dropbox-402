@@ -1,0 +1,24 @@
+version: '3'
+volumes:
+  openbis-state:
+networks:
+  local:
+    driver: bridge
+
+services:
+  openbis:
+    build:
+      context: .
+    environment:
+      - SERVER_HOST_PORT=localhost:8443
+      - GROUP_ID=1000
+      - CORE_PLUGINS=enabled-modules = dropbox-monitor, dataset-uploader, dataset-file-search, xls-import, xls-export, openbis-sync, eln-lims, openbis-ng-ui, search-store
+    volumes:
+      #Openbis state
+      - openbis-state:/home/openbis/openbis_state/
+    ports:
+      - 8443:443
+    networks:
+      - local
+    hostname: openbis
+

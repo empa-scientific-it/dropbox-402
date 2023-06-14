@@ -9,9 +9,18 @@ tasks:
   prepare_dirs:
     dir: ./store
     cmds:
-      - ls ./store/
+      - mkdir -p ./store/incoming-esaf
+      - mkdir -p ./store/incoming-collection
     generates:
       - ./store
+  build_dropbox:
+    sources:
+      - ./app/**/*.kt
+    cmds:
+      - gradle jar
+      -  cp ./app/build/libs/app-all.jar ./openbis/src/esaf/lib
+    generates:
+      - ./openbis/src/esaf/app-all.jar
   build:
     cmds:
       - docker compose build
@@ -53,12 +62,21 @@ tasks:
       - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD} --check
   move:
     cmds:
-      - mv $(./make_upload.sh) ./store/incoming-collection
+      - mv $(./make_upload.sh) ./store/incoming-esaf
     deps:
       - change_store_permissions
       - initialise_masterdata
+      - prepare_dirs
+  restart_dss:
+    deps:
+      - build
+    cmds:
+      - docker compose exec openbis gosu openbis /home/openbis/openbis/bin/dssdown.sh
+      - docker compose exec openbis gosu openbis /home/openbis/openbis/bin/dssup.sh
+
   follow_logs:
     cmds:
       - docker compose exec openbis tail -n 200 /home/openbis/openbis_state/dss_logs/startup_log.txt -n 200 /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
     deps:
       - move
+      #- restart_dss
