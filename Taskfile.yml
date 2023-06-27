@@ -6,21 +6,37 @@ dotenv:
   - ".env"
 
 tasks:
+  clean:
+    cmds:
+      - docker compose stop
+      - docker compose rm -f
   prepare_dirs:
     dir: ./store
     cmds:
-      - mkdir -p ./store/incoming-esaf
-      - mkdir -p ./store/incoming-collection
-    generates:
-      - ./store
+      - mkdir -p ./store/incoming-esaf/
+      - mkdir -p ./openbis/src/esaf/lib/
+    status:
+      - test -d  ./store/incoming-esaf/
+    method: timestamp
+    run: when_changed
   build_dropbox:
+    deps:
+      - prepare_dirs
     sources:
       - ./app/**/*.kt
+      - ./app/src/main/resources/plugin.properties
     cmds:
-      - gradle jar
-      -  cp ./app/build/libs/app-all.jar ./openbis/src/esaf/lib
+      - gradle buildFatJar
+    run: when_changed
+    interactive: true
     generates:
-      - ./openbis/src/esaf/app-all.jar
+      - ./openbis/src/esaf/lib/app-all.jar
+  copy_jar:
+    deps:
+      - build_dropbox
+    cmds:
+        -  cp ./app/src/main/resources/plugin.properties ./openbis/src/esaf/
+        -  cp ./app/build/libs/app-all.jar ./openbis/src/esaf/lib/
   build:
     cmds:
       - docker compose build
@@ -32,11 +48,11 @@ tasks:
       - prepare_dirs
   start_openbis:
     cmds:
-      - docker compose up -d openbis --no-deps --no-recreate --wait
-    deps:
-      - build
+      - docker compose up  openbis --no-deps --no-recreate --wait
     status:
+      -  docker compose ps openbis -q
       - ./openbis/check_health.sh https://${OPENBIS_HOST}:${OPENBIS_PORT}
+    run: when_changed
   change_store_permissions:
     cmds:
       - docker compose exec openbis chmod 777 ${DSS_PATH}/incoming-collection
@@ -44,39 +60,49 @@ tasks:
       - start_openbis
     status:
       - docker compose exec openbis stat -c '%a' ${DSS_PATH}/incoming-collection | grep -q 2777
-  start_initialiser:
-    cmds:
-      - docker compose up -d initialiser --no-deps --no-recreate
-    status:
-      - docker compose ps --status=running | grep -qF "initialiser"
+    run: when_changed
 
   initialise_masterdata:
     cmds:
-      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD}
+      - docker compose run initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD}
     deps:
       - start_openbis
-      - start_initialiser
     sources:
       - initialiser/initialise_masterdata.py
+    preconditions:
+      - ./openbis/check_health.sh https://${OPENBIS_HOST}:${OPENBIS_PORT}
     status:
-      - docker compose exec initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD} --check
+      - docker compose run initialiser python3 ./initialise_masterdata.py -s https://openbis -u ${OPENBIS_USER} -p ${OPENBIS_PASSWORD} --check
+    run: when_changed
+  restart_dss:
+    sources:
+      - ./openbis/src/esaf/lib/*.jar
+    deps:
+      - start_openbis
+      - initialise_masterdata
+      - build_dropbox
+    cmds:
+      - docker compose stop openbis
+      - docker compose up openbis --wait
+      - touch .dss_started
+    generates:
+      - .dss_started
+    interactive: true
+    run: when_changed
+
   move:
     cmds:
-      - mv $(./make_upload.sh) ./store/incoming-esaf
+      - mv $(./make_upload.sh ./resources/log.doc) ./store/incoming-esaf
+    sources:
+      - .dss_started
+    run: always
     deps:
       - change_store_permissions
-      - initialise_masterdata
       - prepare_dirs
-  restart_dss:
-    deps:
-      - build
-    cmds:
-      - docker compose exec openbis gosu openbis /home/openbis/openbis/bin/dssdown.sh
-      - docker compose exec openbis gosu openbis /home/openbis/openbis/bin/dssup.sh
+      - restart_dss
 
   follow_logs:
     cmds:
-      - docker compose exec openbis tail -n 200 /home/openbis/openbis_state/dss_logs/startup_log.txt -n 200 /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
+      - docker compose exec openbis tail -n 200 /home/openbis/openbis_state/dss_logs/startup_log.txt -n 200 /home/openbis/openbis_state/dss_logs/datastore_server_log.txt -n 200 /home/openbis/openbis_state/dss_logs/datastore_server_log.txt
     deps:
       - move
-      #- restart_dss

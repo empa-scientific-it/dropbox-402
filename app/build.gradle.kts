@@ -133,7 +133,10 @@ dependencies {
 
     implementation(layout.projectDirectory.files("libs/openBIS-API-V3-batteries-included.jar"))
 
-    implementation(layout.projectDirectory.files("libs/openBIS-API-dropbox-SNAPSHOT-r1686323139.jar"))
+    implementation(layout.projectDirectory.files("libs/openBIS-API-dropbox-SNAPSHOT-r1686645160.jar"))
+
+    implementation(libs.poi)
+    implementation(libs.poi.ooxml)
 
 }
 
@@ -147,6 +150,7 @@ ktor {
     fatJar {
     }
 }
+
 
 
 

@@ -37,7 +37,7 @@ services:
     volumes:
       - openbis-state:/home/openbis/openbis_state/
       - ./openbis/src:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
-      - ./openbis/src/esaf/libs/:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/lib
+      - ./openbis/src/:/home/openbis/openbis_state/core-plugins/empa/1/dss/drop-boxes/
       - store:${DSS_PATH}
       - ./dss_logs/:/home/openbis/openbis_state/dss_logs/
     ports:
